@@ -62,7 +62,7 @@ func (t *BPlusTree) insertNonFull(node *Node, key int) {
 
 	// For internal nodes, find the appropriate child
 	childIndex := 0
-	for childIndex < len(node.keys) && node.keys[childIndex] < key {
+	for childIndex < len(node.keys) && node.keys[childIndex] <= key {
 		childIndex++
 	}
 
@@ -166,4 +166,56 @@ func (t *BPlusTree) printNode(node *Node, level int) {
 			t.printNode(child, level+1)
 		}
 	}
+}
+
+// Range returns owned keys in [low, high], including duplicates, in sorted order.
+func (t *BPlusTree) Range(low, high int) []int {
+	result := []int{}
+	if low > high {
+		return result
+	}
+	node := t.root
+	// Start at the leftmost leaf so duplicates split across leaves are retained.
+	for !node.isLeaf {
+		node = node.children[0]
+	}
+	for ; node != nil; node = node.next {
+		for _, key := range node.keys {
+			if key > high {
+				return result
+			}
+			if key >= low {
+				result = append(result, key)
+			}
+		}
+	}
+	return result
+}
+
+// Delete removes one occurrence. V1 rebuilds the tree to keep deletion simple
+// and preserve all split/leaf invariants; deletion costs O(n log n).
+func (t *BPlusTree) Delete(key int) bool {
+	node := t.root
+	for !node.isLeaf {
+		node = node.children[0]
+	}
+	keys := []int{}
+	found := false
+	for ; node != nil; node = node.next {
+		for _, k := range node.keys {
+			if !found && k == key {
+				found = true
+				continue
+			}
+			keys = append(keys, k)
+		}
+	}
+	if !found {
+		return false
+	}
+	t.root = NewBPlusTree().root
+	for _, k := range keys {
+		t.Insert(k)
+	}
+	return true
 }
